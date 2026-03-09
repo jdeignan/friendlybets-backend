@@ -191,7 +191,17 @@ app.get("/api/bets", authMiddleware, (req, res) => {
     WHERE bp.user_id IS NOT NULL OR b.creator_id = ?
     ORDER BY b.created_at DESC
   `).all(req.user.id, req.user.id);
-  res.json(bets);
+
+  // Attach participant usernames to each bet
+  const result = bets.map(bet => {
+    const participants = db.prepare(`
+      SELECT u.username FROM bet_participants bp
+      JOIN users u ON bp.user_id = u.id
+      WHERE bp.bet_id = ? AND bp.status = 'accepted'
+    `).all(bet.id).map(r => r.username);
+    return { ...bet, participants_list: participants, my_username: req.user.username };
+  });
+  res.json(result);
 });
 
 app.post("/api/bets", authMiddleware, (req, res) => {
