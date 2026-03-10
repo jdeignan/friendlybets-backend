@@ -1,3 +1,4 @@
+
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
@@ -47,6 +48,10 @@ async function initDB() {
       status TEXT DEFAULT 'active',
       result TEXT,
       updates JSONB DEFAULT '[]',
+      odds_home TEXT,
+      odds_away TEXT,
+      home_team TEXT,
+      away_team TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS bet_participants (
@@ -179,15 +184,15 @@ app.get("/api/bets", authMiddleware, async (req, res) => {
 });
 
 app.post("/api/bets", authMiddleware, async (req, res) => {
-  const { title, description, category, amount, endTime, isPublic } = req.body;
+  const { title, description, category, amount, endTime, isPublic, myPick, oddsHome, oddsAway, homeTeam, awayTeam } = req.body;
   if (!title || !amount) return res.status(400).json({ error: "Missing fields" });
   try {
     const result = await pool.query(
-      "INSERT INTO bets (title,description,category,amount,end_time,is_public,creator_id,admin_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$7) RETURNING *",
-      [title, description||"", category||"admin", amount, endTime||null, isPublic||false, req.user.id]
+      "INSERT INTO bets (title,description,category,amount,end_time,is_public,creator_id,admin_id,odds_home,odds_away,home_team,away_team) VALUES ($1,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11) RETURNING *",
+      [title, description||"", category||"admin", amount, endTime||null, isPublic||false, req.user.id, oddsHome||null, oddsAway||null, homeTeam||null, awayTeam||null]
     );
     const bet = result.rows[0];
-    await pool.query("INSERT INTO bet_participants (bet_id,user_id,status) VALUES ($1,$2,'accepted') ON CONFLICT DO NOTHING", [bet.id, req.user.id]);
+    await pool.query("INSERT INTO bet_participants (bet_id,user_id,pick,status) VALUES ($1,$2,$3,'accepted') ON CONFLICT DO NOTHING", [bet.id, req.user.id, myPick||null]);
     res.json(bet);
   } catch(e) { console.error(e); res.status(500).json({ error: "Server error" }); }
 });
