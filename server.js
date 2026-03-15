@@ -1,4 +1,3 @@
-
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
@@ -72,6 +71,22 @@ async function initDB() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+  // Safely add new columns if they don't exist
+  const alterations = [
+    "ALTER TABLE bets ADD COLUMN IF NOT EXISTS odds_home TEXT",
+    "ALTER TABLE bets ADD COLUMN IF NOT EXISTS odds_away TEXT",
+    "ALTER TABLE bets ADD COLUMN IF NOT EXISTS home_team TEXT",
+    "ALTER TABLE bets ADD COLUMN IF NOT EXISTS away_team TEXT",
+    "ALTER TABLE bets ADD COLUMN IF NOT EXISTS bet_type TEXT",
+    "ALTER TABLE bets ADD COLUMN IF NOT EXISTS guess_answer TEXT",
+    "ALTER TABLE bet_participants ADD COLUMN IF NOT EXISTS pick TEXT",
+    "ALTER TABLE bet_participants ADD COLUMN IF NOT EXISTS guess TEXT",
+    "ALTER TABLE bet_participants ADD COLUMN IF NOT EXISTS start_value NUMERIC",
+    "ALTER TABLE bet_participants ADD COLUMN IF NOT EXISTS end_value NUMERIC",
+  ];
+  for (const sql of alterations) {
+    try { await pool.query(sql); } catch(e) { console.log("Skipping:", sql); }
+  }
   console.log("Database initialized");
 }
 initDB().catch(console.error);
@@ -184,7 +199,7 @@ app.get("/api/bets", authMiddleware, async (req, res) => {
 });
 
 app.post("/api/bets", authMiddleware, async (req, res) => {
-  const { title, description, category, amount, endTime, isPublic, myPick, oddsHome, oddsAway, homeTeam, awayTeam } = req.body;
+  const { title, description, category, amount, endTime, isPublic, myPick, oddsHome, oddsAway, homeTeam, awayTeam, betType, myGuess, myStartValue } = req.body;
   if (!title || !amount) return res.status(400).json({ error: "Missing fields" });
   try {
     const result = await pool.query(
@@ -192,7 +207,7 @@ app.post("/api/bets", authMiddleware, async (req, res) => {
       [title, description||"", category||"admin", amount, endTime||null, isPublic||false, req.user.id, oddsHome||null, oddsAway||null, homeTeam||null, awayTeam||null]
     );
     const bet = result.rows[0];
-    await pool.query("INSERT INTO bet_participants (bet_id,user_id,pick,status) VALUES ($1,$2,$3,'accepted') ON CONFLICT DO NOTHING", [bet.id, req.user.id, myPick||null]);
+    await pool.query("INSERT INTO bet_participants (bet_id,user_id,pick,guess,start_value,status) VALUES ($1,$2,$3,$4,$5,'accepted') ON CONFLICT DO NOTHING", [bet.id, req.user.id, myPick||null, myGuess||null, myStartValue||null]);
     res.json(bet);
   } catch(e) { console.error(e); res.status(500).json({ error: "Server error" }); }
 });
