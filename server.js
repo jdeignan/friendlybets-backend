@@ -233,8 +233,11 @@ app.post("/api/bets/:id/resolve", authMiddleware, async (req, res) => {
 app.get("/api/invites", authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT bi.*, b.title, b.amount, b.end_time, u.username as from_username,
-        (SELECT COUNT(*) FROM bet_participants WHERE bet_id=b.id) as participant_count
+      SELECT bi.*, b.title, b.amount, b.end_time, b.category, b.description,
+        b.odds_home, b.odds_away, b.home_team, b.away_team, b.bet_type,
+        u.username as from_username,
+        (SELECT COUNT(*) FROM bet_participants WHERE bet_id=b.id) as participant_count,
+        (SELECT pick FROM bet_participants WHERE bet_id=b.id AND user_id=b.creator_id LIMIT 1) as creator_pick
       FROM bet_invites bi
       JOIN bets b ON bi.bet_id=b.id
       JOIN users u ON bi.from_user_id=u.id
@@ -245,11 +248,13 @@ app.get("/api/invites", authMiddleware, async (req, res) => {
 });
 
 app.post("/api/invites/:id/accept", authMiddleware, async (req, res) => {
+  const { pick, guess, startValue } = req.body || {};
   try {
     const invite = await pool.query("SELECT * FROM bet_invites WHERE id=$1 AND to_user_id=$2", [req.params.id, req.user.id]);
     if (!invite.rows[0]) return res.status(404).json({ error: "Invite not found" });
     await pool.query("UPDATE bet_invites SET status='accepted' WHERE id=$1", [invite.rows[0].id]);
-    await pool.query("INSERT INTO bet_participants (bet_id,user_id,status) VALUES ($1,$2,'accepted') ON CONFLICT DO NOTHING", [invite.rows[0].bet_id, req.user.id]);
+    await pool.query("INSERT INTO bet_participants (bet_id,user_id,pick,guess,start_value,status) VALUES ($1,$2,$3,$4,$5,'accepted') ON CONFLICT DO NOTHING", 
+      [invite.rows[0].bet_id, req.user.id, pick||null, guess||null, startValue||null]);
     res.json({ success: true });
   } catch(e) { res.status(500).json({ error: "Server error" }); }
 });
