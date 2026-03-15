@@ -188,11 +188,16 @@ app.get("/api/bets", authMiddleware, async (req, res) => {
     `, [req.user.id]);
     const result = await Promise.all(bets.rows.map(async (bet) => {
       const participants = await pool.query(`
-        SELECT u.username FROM bet_participants bp
+        SELECT u.username, bp.pick, bp.guess, bp.start_value FROM bet_participants bp
         JOIN users u ON bp.user_id=u.id
         WHERE bp.bet_id=$1 AND bp.status='accepted'
       `, [bet.id]);
-      return { ...bet, participants_list: participants.rows.map(r => r.username), my_username: req.user.username };
+      return { 
+        ...bet, 
+        participants_list: participants.rows.map(r => r.username),
+        guesses_list: participants.rows.map(r => ({ username: r.username, pick: r.pick, guess: r.guess, start_value: r.start_value })),
+        my_username: req.user.username 
+      };
     }));
     res.json(result);
   } catch(e) { console.error(e); res.status(500).json({ error: "Server error" }); }
