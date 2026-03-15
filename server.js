@@ -203,11 +203,11 @@ app.post("/api/bets", authMiddleware, async (req, res) => {
   if (!title || !amount) return res.status(400).json({ error: "Missing fields" });
   try {
     const result = await pool.query(
-      "INSERT INTO bets (title,description,category,amount,end_time,is_public,creator_id,admin_id,odds_home,odds_away,home_team,away_team) VALUES ($1,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11) RETURNING *",
-      [title, description||"", category||"admin", amount, endTime||null, isPublic||false, req.user.id, oddsHome||null, oddsAway||null, homeTeam||null, awayTeam||null]
+      "INSERT INTO bets (title,description,category,amount,end_time,is_public,creator_id,admin_id,odds_home,odds_away,home_team,away_team,bet_type) VALUES ($1,$2,$3,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12) RETURNING *",
+      [title, description||"", category||"admin", amount, endTime||null, isPublic||false, req.user.id, oddsHome||null, oddsAway||null, homeTeam||null, awayTeam||null, betType||category||null]
     );
     const bet = result.rows[0];
-    await pool.query("INSERT INTO bet_participants (bet_id,user_id,pick,guess,start_value,status) VALUES ($1,$2,$3,$4,$5,'accepted') ON CONFLICT DO NOTHING", [bet.id, req.user.id, myPick||null, myGuess||null, myStartValue||null]);
+    await pool.query("INSERT INTO bet_participants (bet_id,user_id,pick,guess,start_value,status) VALUES ($1,$2,$3,$4,$5,'accepted') ON CONFLICT (bet_id,user_id) DO UPDATE SET pick=EXCLUDED.pick, guess=EXCLUDED.guess, start_value=EXCLUDED.start_value", [bet.id, req.user.id, myPick||null, myGuess||null, myStartValue||null]);
     res.json(bet);
   } catch(e) { console.error(e); res.status(500).json({ error: "Server error" }); }
 });
